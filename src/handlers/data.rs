@@ -8,9 +8,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use arrow::array::{ArrayRef, Float32Array, Float64Array};
+use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
 use arrow_ipc::writer::StreamWriter;
-use arrow_schema::Field;
 use axum::extract::{Query, State};
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -1102,8 +1102,6 @@ fn create_arrow_table(
     coordinate_arrays: &[&Vec<f64>],
     layout: Option<&Vec<String>>,
 ) -> Result<Vec<u8>> {
-    use arrow_schema::DataType;
-    use arrow_schema::Schema;
     use std::sync::Arc;
 
     // Debug logging to help diagnose column length issues

@@ -664,13 +664,15 @@ fn generate_image_response(state: Arc<AppState>, params: &ImageQuery) -> Result<
 
     match format.as_str() {
         "png" => {
-            img.write_to(&mut buffer, image::ImageFormat::Png)
+            image::DynamicImage::ImageRgba8(img.clone())
+                .write_to(&mut buffer, image::ImageFormat::Png)
                 .map_err(|e| RossbyError::ImageGeneration {
                     message: format!("Failed to encode PNG: {}", e),
                 })?;
         }
         "jpeg" => {
-            img.write_to(&mut buffer, image::ImageFormat::Jpeg)
+            image::DynamicImage::ImageRgb8(image::DynamicImage::ImageRgba8(img).to_rgb8())
+                .write_to(&mut buffer, image::ImageFormat::Jpeg)
                 .map_err(|e| RossbyError::ImageGeneration {
                     message: format!("Failed to encode JPEG: {}", e),
                 })?;

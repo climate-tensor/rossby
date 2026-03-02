@@ -1,6 +1,8 @@
 use std::error::Error;
 use std::path::Path;
 
+use netcdf::types::{FloatType, NcVariableType};
+
 fn main() -> Result<(), Box<dyn Error>> {
     // Path to the NetCDF file
     let file_path = Path::new("tests/fixtures/2m_temperature_1982_5.625deg.nc");
@@ -72,14 +74,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             "longitude" | "latitude" | "time" => {
                 // For coordinate variables, try to print all values
                 match var.vartype() {
-                    netcdf::types::VariableType::Basic(netcdf::types::BasicType::Float) => {
+                    NcVariableType::Float(FloatType::F32) => {
                         println!("    Trying to read as f32...");
                         match var.get_values::<f32, _>(&[] as &[netcdf::Extent]) {
                             Ok(vals) => println!("    Values: {:?}", vals),
                             Err(e) => println!("    Error reading values: {}", e),
                         }
                     }
-                    netcdf::types::VariableType::Basic(netcdf::types::BasicType::Double) => {
+                    NcVariableType::Float(FloatType::F64) => {
                         println!("    Trying to read as f64...");
                         match var.get_values::<f64, _>(&[] as &[netcdf::Extent]) {
                             Ok(vals) => println!("    Values: {:?}", vals),
@@ -92,7 +94,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             _ => {
                 // For data variables, try to read just a few values
                 match var.vartype() {
-                    netcdf::types::VariableType::Basic(netcdf::types::BasicType::Float) => {
+                    NcVariableType::Float(FloatType::F32) => {
                         println!("    Trying to read first value as f32...");
                         // Try to read just the first value
                         let indices = vec![0; var.dimensions().len()];
@@ -105,7 +107,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                             Err(e) => println!("    Error reading first value: {}", e),
                         }
                     }
-                    netcdf::types::VariableType::Basic(netcdf::types::BasicType::Double) => {
+                    NcVariableType::Float(FloatType::F64) => {
                         println!("    Trying to read first value as f64...");
                         // Try to read just the first value
                         let indices = vec![0; var.dimensions().len()];
