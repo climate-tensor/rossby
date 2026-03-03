@@ -424,24 +424,24 @@ fn create_test_netcdf_file(path: &Path) -> Result<()> {
         // Define and write lon coordinate - one value at a time
         let mut lon_var = file.add_variable::<f64>("lon", &["lon"])?;
         lon_var.put_attribute("units", "degrees_east")?;
-        lon_var.put_value(0.0, &[0])?;
-        lon_var.put_value(1.0, &[1])?;
+        lon_var.put_value(0.0, [0])?;
+        lon_var.put_value(1.0, [1])?;
     }
 
     {
         // Define and write lat coordinate - one value at a time
         let mut lat_var = file.add_variable::<f64>("lat", &["lat"])?;
         lat_var.put_attribute("units", "degrees_north")?;
-        lat_var.put_value(0.0, &[0])?;
-        lat_var.put_value(1.0, &[1])?;
+        lat_var.put_value(0.0, [0])?;
+        lat_var.put_value(1.0, [1])?;
     }
 
     {
         // Define and write time coordinate - one value at a time
         let mut time_var = file.add_variable::<f64>("time", &["time"])?;
         time_var.put_attribute("units", "days since 2000-01-01")?;
-        time_var.put_value(0.0, &[0])?;
-        time_var.put_value(1.0, &[1])?;
+        time_var.put_value(0.0, [0])?;
+        time_var.put_value(1.0, [1])?;
     }
 
     {
@@ -456,7 +456,7 @@ fn create_test_netcdf_file(path: &Path) -> Result<()> {
                 for x in 0..lon_size {
                     let value = (t * lat_size * lon_size + y * lon_size + x) as f32;
                     // Write to position [t, y, x]
-                    temp_var.put_value(value, &[t, y, x])?;
+                    temp_var.put_value(value, [t, y, x])?;
                 }
             }
         }
@@ -672,12 +672,12 @@ mod tests {
         }
 
         println!("METHOD 3: Writing one value at a time");
-        match var.put_value(1.0f32, &[0]) {
+        match var.put_value(1.0f32, [0]) {
             Ok(_) => println!("SUCCESS: Method 3a worked (first value)"),
             Err(e) => println!("FAILED: Method 3a error: {}", e),
         }
 
-        match var.put_value(2.0f32, &[1]) {
+        match var.put_value(2.0f32, [1]) {
             Ok(_) => println!("SUCCESS: Method 3b worked (second value)"),
             Err(e) => println!("FAILED: Method 3b error: {}", e),
         }

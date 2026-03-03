@@ -295,8 +295,10 @@ mod tests {
         assert!(config.validate().is_err());
 
         // Test invalid log level
-        let mut config = Config::default();
-        config.log_level = "invalid".to_string();
+        let config = Config {
+            log_level: "invalid".to_string(),
+            ..Config::default()
+        };
         assert!(config.validate().is_err());
 
         // Test invalid interpolation method

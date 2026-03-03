@@ -6,13 +6,10 @@ mod common;
 
 use common::{http_client, image_utils, test_data};
 use std::net::SocketAddr;
-use std::sync::Once;
 
 // Global test setup for server
 use once_cell::sync::OnceCell;
 
-static INIT: Once = Once::new();
-static TEST_ADDR: OnceCell<SocketAddr> = OnceCell::new();
 static TEST_TEMP_DIR: OnceCell<tempfile::TempDir> = OnceCell::new();
 static TEST_FILE_PATH: OnceCell<String> = OnceCell::new();
 
@@ -501,10 +498,7 @@ async fn test_data_endpoint() {
     // Test error cases - common for both formats
 
     // Add debug logging for nonexistent variable test
-    println!(
-        "Making request to: http://{}{}",
-        addr, "/data?vars=nonexistent"
-    );
+    println!("Making request to: http://{}/data?vars=nonexistent", addr);
 
     // Test error case - invalid variable
     let response = http_client::get(&addr, "/data?vars=nonexistent")

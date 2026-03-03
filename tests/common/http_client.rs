@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! HTTP client utilities for testing.
 //!
 //! This module provides helper functions for making HTTP requests to the rossby server during tests.

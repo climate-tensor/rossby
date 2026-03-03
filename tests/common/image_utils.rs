@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Image comparison utilities for testing.
 //!
 //! This module provides helper functions for comparing and verifying images in tests.

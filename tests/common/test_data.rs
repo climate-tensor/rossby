@@ -64,21 +64,21 @@ pub fn create_linear_gradient_nc(path: &Path, size: (usize, usize)) -> Result<()
     {
         let mut lon_var = file.add_variable::<f32>("lon", &["lon"])?;
         lon_var.put_attribute("units", "degrees_east")?;
-        lon_var.put_values(&lon_values, &[..])?;
+        lon_var.put_values(&lon_values, [..])?;
     }
 
     // Add and configure the lat variable
     {
         let mut lat_var = file.add_variable::<f32>("lat", &["lat"])?;
         lat_var.put_attribute("units", "degrees_north")?;
-        lat_var.put_values(&lat_values, &[..])?;
+        lat_var.put_values(&lat_values, [..])?;
     }
 
     // Add and configure the time variable
     {
         let mut time_var = file.add_variable::<f32>("time", &["time"])?;
         time_var.put_attribute("units", "days since 1982-01-01")?;
-        time_var.put_values(&time_values, &[..])?;
+        time_var.put_values(&time_values, [..])?;
     }
 
     // Add and configure the data variable
@@ -86,7 +86,7 @@ pub fn create_linear_gradient_nc(path: &Path, size: (usize, usize)) -> Result<()
         let mut data_var = file.add_variable::<f32>("gradient", &["time", "lat", "lon"])?;
         data_var.put_attribute("units", "arbitrary")?;
         data_var.put_attribute("long_name", "Linear Gradient")?;
-        data_var.put_values(&data_values, &[.., .., ..])?;
+        data_var.put_values(&data_values, [.., .., ..])?;
     }
 
     Ok(())
@@ -151,21 +151,21 @@ pub fn create_sinusoidal_nc(path: &Path, size: (usize, usize)) -> Result<()> {
     {
         let mut lon_var = file.add_variable::<f32>("lon", &["lon"])?;
         lon_var.put_attribute("units", "degrees_east")?;
-        lon_var.put_values(&lon_values, &[..])?;
+        lon_var.put_values(&lon_values, [..])?;
     }
 
     // Add and configure the lat variable
     {
         let mut lat_var = file.add_variable::<f32>("lat", &["lat"])?;
         lat_var.put_attribute("units", "degrees_north")?;
-        lat_var.put_values(&lat_values, &[..])?;
+        lat_var.put_values(&lat_values, [..])?;
     }
 
     // Add and configure the time variable
     {
         let mut time_var = file.add_variable::<f32>("time", &["time"])?;
         time_var.put_attribute("units", "days since 1982-01-01")?;
-        time_var.put_values(&time_values, &[..])?;
+        time_var.put_values(&time_values, [..])?;
     }
 
     // Add and configure the data variable
@@ -173,7 +173,7 @@ pub fn create_sinusoidal_nc(path: &Path, size: (usize, usize)) -> Result<()> {
         let mut data_var = file.add_variable::<f32>("wave", &["time", "lat", "lon"])?;
         data_var.put_attribute("units", "arbitrary")?;
         data_var.put_attribute("long_name", "Sinusoidal Wave Pattern")?;
-        data_var.put_values(&data_values, &[.., .., ..])?;
+        data_var.put_values(&data_values, [.., .., ..])?;
     }
 
     Ok(())
@@ -240,21 +240,21 @@ pub fn create_gaussian_blob_nc(path: &Path, size: (usize, usize)) -> Result<()> 
     {
         let mut lon_var = file.add_variable::<f32>("lon", &["lon"])?;
         lon_var.put_attribute("units", "degrees_east")?;
-        lon_var.put_values(&lon_values, &[..])?;
+        lon_var.put_values(&lon_values, [..])?;
     }
 
     // Add and configure the lat variable
     {
         let mut lat_var = file.add_variable::<f32>("lat", &["lat"])?;
         lat_var.put_attribute("units", "degrees_north")?;
-        lat_var.put_values(&lat_values, &[..])?;
+        lat_var.put_values(&lat_values, [..])?;
     }
 
     // Add and configure the time variable
     {
         let mut time_var = file.add_variable::<f32>("time", &["time"])?;
         time_var.put_attribute("units", "days since 1982-01-01")?;
-        time_var.put_values(&time_values, &[..])?;
+        time_var.put_values(&time_values, [..])?;
     }
 
     // Add and configure the data variable
@@ -262,7 +262,7 @@ pub fn create_gaussian_blob_nc(path: &Path, size: (usize, usize)) -> Result<()> 
         let mut data_var = file.add_variable::<f32>("blob", &["time", "lat", "lon"])?;
         data_var.put_attribute("units", "arbitrary")?;
         data_var.put_attribute("long_name", "Gaussian Blob Pattern")?;
-        data_var.put_values(&data_values, &[.., .., ..])?;
+        data_var.put_values(&data_values, [.., .., ..])?;
     }
 
     Ok(())
@@ -316,12 +316,8 @@ pub fn create_test_weather_nc(path: &Path) -> Result<()> {
 
     // Generate synthetic weather data
     for t in 0..time_steps {
-        for y in 0..lat_size {
-            let lat = lat_values[y];
-
-            for x in 0..lon_size {
-                let lon = lon_values[x];
-
+        for &lat in lat_values.iter().take(lat_size) {
+            for &lon in lon_values.iter().take(lon_size) {
                 // Base temperature varies with latitude (colder at poles)
                 let base_temp = 273.15 + 30.0 * (1.0 - (lat / 90.0).abs());
 
@@ -348,7 +344,7 @@ pub fn create_test_weather_nc(path: &Path) -> Result<()> {
                 // Calculate humidity based on temperature (simplistic model)
                 // Relative humidity in percent, higher in warm areas with precipitation
                 let humidity = 50.0 + 40.0 * (precip / 5.0) + 10.0 * ((temp - 273.15) / 30.0);
-                let humidity = humidity.max(0.0).min(100.0);
+                let humidity = humidity.clamp(0.0, 100.0);
 
                 // Add data to arrays
                 temp_data.push(temp);
@@ -367,7 +363,7 @@ pub fn create_test_weather_nc(path: &Path) -> Result<()> {
         lon_var.put_attribute("units", "degrees_east")?;
         lon_var.put_attribute("long_name", "Longitude")?;
         lon_var.put_attribute("standard_name", "longitude")?;
-        lon_var.put_values(&lon_values, &[..])?;
+        lon_var.put_values(&lon_values, [..])?;
     }
 
     // Add and configure the lat variable
@@ -376,7 +372,7 @@ pub fn create_test_weather_nc(path: &Path) -> Result<()> {
         lat_var.put_attribute("units", "degrees_north")?;
         lat_var.put_attribute("long_name", "Latitude")?;
         lat_var.put_attribute("standard_name", "latitude")?;
-        lat_var.put_values(&lat_values, &[..])?;
+        lat_var.put_values(&lat_values, [..])?;
     }
 
     // Add and configure the time variable
@@ -385,7 +381,7 @@ pub fn create_test_weather_nc(path: &Path) -> Result<()> {
         time_var.put_attribute("units", "days since 1982-01-01")?;
         time_var.put_attribute("long_name", "Time")?;
         time_var.put_attribute("calendar", "standard")?;
-        time_var.put_values(&time_values, &[..])?;
+        time_var.put_values(&time_values, [..])?;
     }
 
     // Add and configure the temperature variable
@@ -394,7 +390,7 @@ pub fn create_test_weather_nc(path: &Path) -> Result<()> {
         temp_var.put_attribute("units", "K")?;
         temp_var.put_attribute("long_name", "Temperature")?;
         temp_var.put_attribute("standard_name", "air_temperature")?;
-        temp_var.put_values(&temp_data, &[.., .., ..])?;
+        temp_var.put_values(&temp_data, [.., .., ..])?;
     }
 
     // Add and configure the u_wind variable
@@ -403,7 +399,7 @@ pub fn create_test_weather_nc(path: &Path) -> Result<()> {
         u_wind_var.put_attribute("units", "m/s")?;
         u_wind_var.put_attribute("long_name", "Eastward Wind")?;
         u_wind_var.put_attribute("standard_name", "eastward_wind")?;
-        u_wind_var.put_values(&u_wind_data, &[.., .., ..])?;
+        u_wind_var.put_values(&u_wind_data, [.., .., ..])?;
     }
 
     // Add and configure the v_wind variable
@@ -412,7 +408,7 @@ pub fn create_test_weather_nc(path: &Path) -> Result<()> {
         v_wind_var.put_attribute("units", "m/s")?;
         v_wind_var.put_attribute("long_name", "Northward Wind")?;
         v_wind_var.put_attribute("standard_name", "northward_wind")?;
-        v_wind_var.put_values(&v_wind_data, &[.., .., ..])?;
+        v_wind_var.put_values(&v_wind_data, [.., .., ..])?;
     }
 
     // Add and configure the pressure variable
@@ -421,7 +417,7 @@ pub fn create_test_weather_nc(path: &Path) -> Result<()> {
         pressure_var.put_attribute("units", "hPa")?;
         pressure_var.put_attribute("long_name", "Sea Level Pressure")?;
         pressure_var.put_attribute("standard_name", "air_pressure_at_sea_level")?;
-        pressure_var.put_values(&pressure_data, &[.., .., ..])?;
+        pressure_var.put_values(&pressure_data, [.., .., ..])?;
     }
 
     // Add and configure the precipitation variable
@@ -430,7 +426,7 @@ pub fn create_test_weather_nc(path: &Path) -> Result<()> {
         precip_var.put_attribute("units", "mm/day")?;
         precip_var.put_attribute("long_name", "Precipitation Rate")?;
         precip_var.put_attribute("standard_name", "precipitation_rate")?;
-        precip_var.put_values(&precip_data, &[.., .., ..])?;
+        precip_var.put_values(&precip_data, [.., .., ..])?;
     }
 
     // Add and configure the humidity variable
@@ -439,7 +435,7 @@ pub fn create_test_weather_nc(path: &Path) -> Result<()> {
         humidity_var.put_attribute("units", "%")?;
         humidity_var.put_attribute("long_name", "Relative Humidity")?;
         humidity_var.put_attribute("standard_name", "relative_humidity")?;
-        humidity_var.put_values(&humidity_data, &[.., .., ..])?;
+        humidity_var.put_values(&humidity_data, [.., .., ..])?;
     }
 
     Ok(())
