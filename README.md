@@ -152,7 +152,7 @@ Returns a JSON object describing all variables, dimensions, and attributes of th
 
 **Response Structure:**
 
-```json
+```jsonc
 {
   "global_attributes": {
     // File-level attributes
