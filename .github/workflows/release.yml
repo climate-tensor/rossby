@@ -1,0 +1,115 @@
+name: Release Binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  BIN_NAME: rossby
+
+jobs:
+  build-and-upload:
+    name: Release ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            binary_ext: ""
+            archive_ext: tar.gz
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            binary_ext: ""
+            archive_ext: tar.gz
+          - os: macos-14
+            target: aarch64-apple-darwin
+            binary_ext: ""
+            archive_ext: tar.gz
+          - os: windows-2025
+            target: x86_64-pc-windows-msvc
+            binary_ext: .exe
+            archive_ext: zip
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Resolve release metadata
+        id: release_meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            tag="${{ github.event.release.tag_name }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+
+          archive_name="${BIN_NAME}-${tag}-${{ matrix.target }}"
+
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "archive_name=${archive_name}" >> "${GITHUB_OUTPUT}"
+          echo "asset_path=dist/${archive_name}.${{ matrix.archive_ext }}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build release binary
+        run: cargo build --locked --release --bin "${BIN_NAME}" --target "${{ matrix.target }}"
+
+      - name: Package release archive
+        shell: bash
+        run: |
+          archive_name="${{ steps.release_meta.outputs.archive_name }}"
+          package_dir="dist/${archive_name}"
+          binary_path="target/${{ matrix.target }}/release/${BIN_NAME}${{ matrix.binary_ext }}"
+
+          mkdir -p "${package_dir}"
+          cp "${binary_path}" "${package_dir}/"
+          cp README.md LICENSE* "${package_dir}/"
+
+          if [ "${{ matrix.archive_ext }}" = "zip" ]; then
+            7z a "${{ steps.release_meta.outputs.asset_path }}" "./${package_dir}" >/dev/null
+          else
+            tar -C dist -czf "${{ steps.release_meta.outputs.asset_path }}" "${archive_name}"
+          fi
+
+      - name: Ensure GitHub release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag="${{ steps.release_meta.outputs.tag }}"
+
+          gh release view "${tag}" >/dev/null 2>&1 || \
+          gh release create "${tag}" \
+            --verify-tag \
+            --generate-notes \
+            --title "${tag}" >/dev/null 2>&1 || \
+          gh release view "${tag}" >/dev/null 2>&1
+
+      - name: Upload archive to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release upload "${{ steps.release_meta.outputs.tag }}" \
+            "${{ steps.release_meta.outputs.asset_path }}" \
+            --clobber
