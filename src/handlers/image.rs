@@ -162,10 +162,9 @@ fn generate_image(
 
             // Perform interpolation to get the value at this pixel
             let indices = vec![data_y, data_x];
-            let data_value = match interpolator.interpolate(&flat_data, &shape, &indices) {
-                Ok(val) => val,
-                Err(_) => f32::NAN, // Use NaN for interpolation errors
-            };
+            let data_value = interpolator
+                .interpolate(&flat_data, &shape, &indices)
+                .unwrap_or(f32::NAN);
 
             // Map value to color
             let color = if data_value.is_finite() {
@@ -664,13 +663,15 @@ fn generate_image_response(state: Arc<AppState>, params: &ImageQuery) -> Result<
 
     match format.as_str() {
         "png" => {
-            img.write_to(&mut buffer, image::ImageFormat::Png)
+            image::DynamicImage::ImageRgba8(img.clone())
+                .write_to(&mut buffer, image::ImageFormat::Png)
                 .map_err(|e| RossbyError::ImageGeneration {
                     message: format!("Failed to encode PNG: {}", e),
                 })?;
         }
         "jpeg" => {
-            img.write_to(&mut buffer, image::ImageFormat::Jpeg)
+            image::DynamicImage::ImageRgb8(image::DynamicImage::ImageRgba8(img).to_rgb8())
+                .write_to(&mut buffer, image::ImageFormat::Jpeg)
                 .map_err(|e| RossbyError::ImageGeneration {
                     message: format!("Failed to encode JPEG: {}", e),
                 })?;
@@ -820,9 +821,9 @@ mod tests {
         // - Right of image (x=width-1) should map to east (highest longitude, column 2 of data)
 
         // For correctly oriented geographic data with direct mapping:
-        assert!(intensity(&top_left) < intensity(&top_right)); // West to East increases (direct x mapping)
-        assert!(intensity(&top_left) < intensity(&bottom_left)); // South to North increases (direct y mapping)
-        assert!(intensity(&bottom_left) < intensity(&bottom_right)); // West to East increases (direct x mapping)
-        assert!(intensity(&top_right) < intensity(&bottom_right)); // South to North increases (direct y mapping)
+        assert!(intensity(top_left) < intensity(top_right)); // West to East increases (direct x mapping)
+        assert!(intensity(top_left) < intensity(bottom_left)); // South to North increases (direct y mapping)
+        assert!(intensity(bottom_left) < intensity(bottom_right)); // West to East increases (direct x mapping)
+        assert!(intensity(top_right) < intensity(bottom_right)); // South to North increases (direct y mapping)
     }
 }

@@ -158,17 +158,17 @@ fn extract_metadata(file: &netcdf::File) -> Result<Metadata> {
 
 /// Check if a variable has a supported type that we can work with
 fn is_supported_variable(var: &NetCDFVariable) -> bool {
-    use netcdf::types::{BasicType, VariableType};
+    use netcdf::types::{FloatType, IntType, NcVariableType};
 
     matches!(
         var.vartype(),
-        VariableType::Basic(BasicType::Byte)
-            | VariableType::Basic(BasicType::Char)
-            | VariableType::Basic(BasicType::Short)
-            | VariableType::Basic(BasicType::Int)
-            | VariableType::Basic(BasicType::Int64)
-            | VariableType::Basic(BasicType::Float)
-            | VariableType::Basic(BasicType::Double)
+        NcVariableType::Int(IntType::I8)
+            | NcVariableType::Char
+            | NcVariableType::Int(IntType::I16)
+            | NcVariableType::Int(IntType::I32)
+            | NcVariableType::Int(IntType::I64)
+            | NcVariableType::Float(FloatType::F32)
+            | NcVariableType::Float(FloatType::F64)
     )
 }
 
@@ -202,7 +202,7 @@ fn convert_attribute(attr: &Attribute) -> Result<AttributeValue> {
 
 /// Extract coordinate values from a coordinate variable - reading one value at a time
 fn extract_coordinate_values(var: &NetCDFVariable) -> Result<Vec<f64>> {
-    use netcdf::types::{BasicType, VariableType};
+    use netcdf::types::{FloatType, IntType, NcVariableType};
 
     // Get the dimension size
     let dim_size = var.dimensions()[0].len();
@@ -210,42 +210,42 @@ fn extract_coordinate_values(var: &NetCDFVariable) -> Result<Vec<f64>> {
 
     // Read each value individually based on the variable type
     match var.vartype() {
-        VariableType::Basic(BasicType::Byte) => {
+        NcVariableType::Int(IntType::I8) => {
             for i in 0..dim_size {
                 let index = [i]; // Use a fixed-size array instead of Vec
                 let value: i8 = var.get_value(index)?;
                 values.push(value as f64);
             }
         }
-        VariableType::Basic(BasicType::Short) => {
+        NcVariableType::Int(IntType::I16) => {
             for i in 0..dim_size {
                 let index = [i];
                 let value: i16 = var.get_value(index)?;
                 values.push(value as f64);
             }
         }
-        VariableType::Basic(BasicType::Int) => {
+        NcVariableType::Int(IntType::I32) => {
             for i in 0..dim_size {
                 let index = [i];
                 let value: i32 = var.get_value(index)?;
                 values.push(value as f64);
             }
         }
-        VariableType::Basic(BasicType::Int64) => {
+        NcVariableType::Int(IntType::I64) => {
             for i in 0..dim_size {
                 let index = [i];
                 let value: i64 = var.get_value(index)?;
                 values.push(value as f64);
             }
         }
-        VariableType::Basic(BasicType::Float) => {
+        NcVariableType::Float(FloatType::F32) => {
             for i in 0..dim_size {
                 let index = [i];
                 let value: f32 = var.get_value(index)?;
                 values.push(value as f64);
             }
         }
-        VariableType::Basic(BasicType::Double) => {
+        NcVariableType::Float(FloatType::F64) => {
             for i in 0..dim_size {
                 let index = [i];
                 let value: f64 = var.get_value(index)?;
@@ -295,7 +295,7 @@ fn extract_data(
 
 /// Convert a NetCDF variable to an ndarray Array<f32, IxDyn> - reading one value at a time
 fn convert_variable_to_array(var: &NetCDFVariable, shape: &[usize]) -> Result<Array<f32, IxDyn>> {
-    use netcdf::types::{BasicType, VariableType};
+    use netcdf::types::{FloatType, IntType, NcVariableType};
 
     // Create the shape for the ndarray
     let dim = Dim(shape.to_vec());
@@ -309,7 +309,7 @@ fn convert_variable_to_array(var: &NetCDFVariable, shape: &[usize]) -> Result<Ar
 
     // Read each value individually based on the variable type
     match var.vartype() {
-        VariableType::Basic(BasicType::Byte) => {
+        NcVariableType::Int(IntType::I8) => {
             // Use a fixed-size array to hold the indices
             let mut index_array = [0; 10]; // Most NetCDF files won't have more than 10 dimensions
 
@@ -324,7 +324,7 @@ fn convert_variable_to_array(var: &NetCDFVariable, shape: &[usize]) -> Result<Ar
                 data.push(value as f32);
             }
         }
-        VariableType::Basic(BasicType::Short) => {
+        NcVariableType::Int(IntType::I16) => {
             let mut index_array = [0; 10];
 
             for i in 0..total_elements {
@@ -335,7 +335,7 @@ fn convert_variable_to_array(var: &NetCDFVariable, shape: &[usize]) -> Result<Ar
                 data.push(value as f32);
             }
         }
-        VariableType::Basic(BasicType::Int) => {
+        NcVariableType::Int(IntType::I32) => {
             let mut index_array = [0; 10];
 
             for i in 0..total_elements {
@@ -346,7 +346,7 @@ fn convert_variable_to_array(var: &NetCDFVariable, shape: &[usize]) -> Result<Ar
                 data.push(value as f32);
             }
         }
-        VariableType::Basic(BasicType::Int64) => {
+        NcVariableType::Int(IntType::I64) => {
             let mut index_array = [0; 10];
 
             for i in 0..total_elements {
@@ -357,7 +357,7 @@ fn convert_variable_to_array(var: &NetCDFVariable, shape: &[usize]) -> Result<Ar
                 data.push(value as f32);
             }
         }
-        VariableType::Basic(BasicType::Float) => {
+        NcVariableType::Float(FloatType::F32) => {
             let mut index_array = [0; 10];
 
             for i in 0..total_elements {
@@ -368,7 +368,7 @@ fn convert_variable_to_array(var: &NetCDFVariable, shape: &[usize]) -> Result<Ar
                 data.push(value);
             }
         }
-        VariableType::Basic(BasicType::Double) => {
+        NcVariableType::Float(FloatType::F64) => {
             let mut index_array = [0; 10];
 
             for i in 0..total_elements {
@@ -424,24 +424,24 @@ fn create_test_netcdf_file(path: &Path) -> Result<()> {
         // Define and write lon coordinate - one value at a time
         let mut lon_var = file.add_variable::<f64>("lon", &["lon"])?;
         lon_var.put_attribute("units", "degrees_east")?;
-        lon_var.put_value(0.0, &[0])?;
-        lon_var.put_value(1.0, &[1])?;
+        lon_var.put_value(0.0, [0])?;
+        lon_var.put_value(1.0, [1])?;
     }
 
     {
         // Define and write lat coordinate - one value at a time
         let mut lat_var = file.add_variable::<f64>("lat", &["lat"])?;
         lat_var.put_attribute("units", "degrees_north")?;
-        lat_var.put_value(0.0, &[0])?;
-        lat_var.put_value(1.0, &[1])?;
+        lat_var.put_value(0.0, [0])?;
+        lat_var.put_value(1.0, [1])?;
     }
 
     {
         // Define and write time coordinate - one value at a time
         let mut time_var = file.add_variable::<f64>("time", &["time"])?;
         time_var.put_attribute("units", "days since 2000-01-01")?;
-        time_var.put_value(0.0, &[0])?;
-        time_var.put_value(1.0, &[1])?;
+        time_var.put_value(0.0, [0])?;
+        time_var.put_value(1.0, [1])?;
     }
 
     {
@@ -456,7 +456,7 @@ fn create_test_netcdf_file(path: &Path) -> Result<()> {
                 for x in 0..lon_size {
                     let value = (t * lat_size * lon_size + y * lon_size + x) as f32;
                     // Write to position [t, y, x]
-                    temp_var.put_value(value, &[t, y, x])?;
+                    temp_var.put_value(value, [t, y, x])?;
                 }
             }
         }
@@ -672,12 +672,12 @@ mod tests {
         }
 
         println!("METHOD 3: Writing one value at a time");
-        match var.put_value(1.0f32, &[0]) {
+        match var.put_value(1.0f32, [0]) {
             Ok(_) => println!("SUCCESS: Method 3a worked (first value)"),
             Err(e) => println!("FAILED: Method 3a error: {}", e),
         }
 
-        match var.put_value(2.0f32, &[1]) {
+        match var.put_value(2.0f32, [1]) {
             Ok(_) => println!("SUCCESS: Method 3b worked (second value)"),
             Err(e) => println!("FAILED: Method 3b error: {}", e),
         }

@@ -20,14 +20,14 @@ exclude = [
 
 [dependencies]
 # Web framework
-axum = "0.7"
+axum = "0.8"
 tokio = { version = "1", features = ["full"] }
-tower = "0.4"
-tower-http = { version = "0.5", features = ["cors", "trace"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
 
 # NetCDF and data handling
-netcdf = { version = "0.9", features = ["static"], optional = true }
-ndarray = "0.15"
+netcdf = { version = "0.12", features = ["static"], optional = true }
+ndarray = "0.17"
 
 # CLI and configuration
 clap = { version = "4", features = ["derive", "env"] }
@@ -35,11 +35,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # Image generation
-image = "0.24"
-colorgrad = "0.6"
+image = "0.25"
+colorgrad = "0.8"
 
 # Error handling and utilities
-thiserror = "1"
+thiserror = "2"
 anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -47,21 +47,20 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Additional utilities
 once_cell = "1"
 parking_lot = "0.12"
-uuid = { version = "1.4", features = ["v4"] }
+uuid = { version = "1.21", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
-bytes = "1.5.0"
+bytes = "1.11.1"
 futures = "0.3"
 
 # Apache Arrow for data serialization
-arrow = "55.0.0"
-arrow-array = "55.0.0"
-arrow-schema = "55.0.0"
-arrow-ipc = "55.0.0"
+arrow = "58.0.0"
+arrow-array = "58.0.0"
+arrow-ipc = "58.0.0"
 
 [dev-dependencies]
 # Testing
-criterion = { version = "0.5", features = ["html_reports"] }
-reqwest = { version = "0.11", features = ["json"] }
+criterion = { version = "0.8", features = ["html_reports"] }
+reqwest = { version = "0.13", features = ["json"] }
 tempfile = "3"
 pretty_assertions = "1"
 
