@@ -31,18 +31,18 @@ jobs:
             target: x86_64-unknown-linux-gnu
             binary_ext: ""
             archive_ext: tar.gz
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
-            binary_ext: ""
-            archive_ext: tar.gz
           - os: macos-14
             target: aarch64-apple-darwin
             binary_ext: ""
             archive_ext: tar.gz
-          - os: windows-2025
-            target: x86_64-pc-windows-msvc
-            binary_ext: .exe
-            archive_ext: zip
+          # - os: macos-15-intel
+          #   target: x86_64-apple-darwin
+          #   binary_ext: ""
+          #   archive_ext: tar.gz
+          # - os: windows-2025
+          #   target: x86_64-pc-windows-msvc
+          #   binary_ext: .exe
+          #   archive_ext: zip
 
     steps:
       - uses: actions/checkout@v6
