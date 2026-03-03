@@ -44,6 +44,15 @@ pub struct Args {
     /// Service discovery URL for registering this server
     #[arg(long, env = "ROSSBY_DISCOVERY_URL")]
     pub discovery_url: Option<String>,
+
+    /// Variable names to ignore during NetCDF loading
+    #[arg(
+        long = "ignore-variable",
+        env = "ROSSBY_IGNORE_VARIABLES",
+        value_delimiter = ',',
+        action = clap::ArgAction::Append
+    )]
+    pub ignore_variables: Vec<String>,
 }
 
 /// Server configuration
@@ -85,6 +94,10 @@ pub struct DataConfig {
     /// For example: {"latitude": "lat", "longitude": "lon", "time": "t"}
     #[serde(default)]
     pub dimension_aliases: HashMap<String, String>,
+
+    /// Variable names to ignore during NetCDF loading
+    #[serde(default)]
+    pub ignore_variables: Vec<String>,
 }
 
 /// Complete configuration
@@ -127,6 +140,9 @@ impl Config {
             config.server.discovery_url = args.discovery_url;
         }
         config.log_level = args.log_level;
+        if !args.ignore_variables.is_empty() {
+            config.data.ignore_variables.extend(args.ignore_variables);
+        }
 
         // NetCDF file path from command line takes precedence
         let netcdf_path = args.netcdf_file;
@@ -226,6 +242,7 @@ impl Default for DataConfig {
             interpolation_method: default_interpolation(),
             file_path: None,
             dimension_aliases: HashMap::new(),
+            ignore_variables: Vec::new(),
         }
     }
 }
@@ -261,6 +278,7 @@ mod tests {
         assert_eq!(config.server.host, "127.0.0.1");
         assert_eq!(config.server.port, 8000);
         assert_eq!(config.data.interpolation_method, "bilinear");
+        assert!(config.data.ignore_variables.is_empty());
         assert_eq!(config.log_level, "info");
     }
 
@@ -271,11 +289,13 @@ mod tests {
 
         config2.server.port = 9000;
         config2.server.workers = Some(4);
+        config2.data.ignore_variables = vec!["scalar".to_string()];
 
         config1.merge(config2);
 
         assert_eq!(config1.server.port, 9000);
         assert_eq!(config1.server.workers, Some(4));
+        assert_eq!(config1.data.ignore_variables, vec!["scalar"]);
     }
 
     #[test]
