@@ -53,12 +53,17 @@ This document outlines the steps that have been completed to prepare the Rossby 
 
 3. **Publish to crates.io**
    ```bash
-   # Login to crates.io (only needed once)
-   cargo login
-
-   # Publish
-   cargo publish
+   # Stable tags are published automatically by GitHub Actions.
+   # Example:
+   git tag -a v0.1.0 -m "v0.1.0"
+   git push origin v0.1.0
    ```
+   Notes:
+   - The workflow publishes only `v*` tags without a prerelease suffix
+   - Tags such as `v0.1.0-alpha.3` and `v0.1.0-beta.1` will skip crates.io publishing
+   - Publishing is handled by `.github/workflows/publish.yml`
+   - The crate must be configured on crates.io to trust this repository, workflow file `publish.yml`, and environment `publish`
+   - The first release still needs a manual publish before Trusted Publishing can be enabled on crates.io
 
 4. **Post-Publishing**
    - Verify the package appears on crates.io
