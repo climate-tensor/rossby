@@ -8,11 +8,6 @@ and this project adheres to
 
 ## [0.0.3] - 2026-03-03
 
-### Added
-
-- Support for ignoring specific NetCDF variables during loading, configurable
-  via CLI, environment variables, or JSON config file
-
 ### Changed
 
 - Bump dependency versions
