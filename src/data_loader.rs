@@ -6,7 +6,7 @@
 
 use ndarray::{Array, Dim, IxDyn};
 use netcdf::{self, Attribute, Variable as NetCDFVariable};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 use tracing::{debug, info, warn};
 
@@ -19,10 +19,8 @@ pub type LoadResult = Result<(Metadata, HashMap<String, Array<f32, IxDyn>>)>;
 
 /// Load a NetCDF file into memory and create the application state
 pub fn load_netcdf(path: &Path, config: Config) -> Result<AppState> {
-    let ignored_variables = build_ignored_variable_set(&config);
-
     // Load the NetCDF data and metadata
-    let (metadata, data) = load_netcdf_file(path, &ignored_variables)?;
+    let (metadata, data) = load_netcdf_file(path)?;
 
     // Validate the loaded data
     validate_netcdf_data(&metadata, &data)?;
@@ -34,7 +32,7 @@ pub fn load_netcdf(path: &Path, config: Config) -> Result<AppState> {
 }
 
 /// Load a NetCDF file into memory, returning metadata and data
-fn load_netcdf_file(path: &Path, ignored_variables: &HashSet<String>) -> LoadResult {
+fn load_netcdf_file(path: &Path) -> LoadResult {
     // Check if the file exists
     if !path.exists() {
         return Err(RossbyError::Io(std::io::Error::new(
@@ -60,7 +58,7 @@ fn load_netcdf_file(path: &Path, ignored_variables: &HashSet<String>) -> LoadRes
     debug!("File has {} dimensions", dimensions_count);
 
     // Extract file metadata
-    let metadata = extract_metadata(&file, ignored_variables)?;
+    let metadata = extract_metadata(&file)?;
 
     // Extract data from variables
     let data = extract_data(&file, &metadata)?;
@@ -69,7 +67,7 @@ fn load_netcdf_file(path: &Path, ignored_variables: &HashSet<String>) -> LoadRes
 }
 
 /// Extract metadata from the NetCDF file
-fn extract_metadata(file: &netcdf::File, ignored_variables: &HashSet<String>) -> Result<Metadata> {
+fn extract_metadata(file: &netcdf::File) -> Result<Metadata> {
     // Extract global attributes
     let mut global_attributes = HashMap::new();
     for attr in file.attributes() {
@@ -93,16 +91,9 @@ fn extract_metadata(file: &netcdf::File, ignored_variables: &HashSet<String>) ->
     let mut coordinates = HashMap::new();
 
     for var in file.variables() {
-        let var_name = var.name();
-
-        if ignored_variables.contains(var_name.as_str()) {
-            warn!("Ignoring variable from config: {}", var_name);
-            continue;
-        }
-
         // Skip variables we can't handle (non-numeric types)
         if !is_supported_variable(&var) {
-            warn!("Skipping unsupported variable: {}", var_name);
+            warn!("Skipping unsupported variable: {}", var.name());
             continue;
         }
 
@@ -128,20 +119,20 @@ fn extract_metadata(file: &netcdf::File, ignored_variables: &HashSet<String>) ->
 
         // Create variable metadata
         let variable = Variable {
-            name: var_name.clone(),
+            name: var.name().to_string(),
             dimensions: var_dims,
             shape: var_shape,
             attributes: var_attrs,
             dtype: format!("{:?}", var.vartype()),
         };
 
-        variables.insert(var_name.clone(), variable);
+        variables.insert(var.name().to_string(), variable);
 
         // If this is a coordinate variable (name matches a dimension),
         // extract the coordinate values
-        if file.dimension(&var_name).is_some() {
+        if file.dimension(&var.name()).is_some() {
             let coord_values = extract_coordinate_values(&var)?;
-            coordinates.insert(var_name, coord_values);
+            coordinates.insert(var.name().to_string(), coord_values);
         }
     }
 
@@ -163,17 +154,6 @@ fn extract_metadata(file: &netcdf::File, ignored_variables: &HashSet<String>) ->
         variables,
         coordinates,
     })
-}
-
-fn build_ignored_variable_set(config: &Config) -> HashSet<String> {
-    config
-        .data
-        .ignore_variables
-        .iter()
-        .map(|name| name.trim())
-        .filter(|name| !name.is_empty())
-        .map(ToOwned::to_owned)
-        .collect()
 }
 
 /// Check if a variable has a supported type that we can work with
@@ -510,19 +490,6 @@ fn create_test_netcdf_file(path: &Path) -> Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
-fn create_test_netcdf_file_with_scalar_variable(path: &Path) -> Result<()> {
-    create_test_netcdf_file(path)?;
-
-    let mut file = netcdf::append(path)?;
-    let mut scalar_var = file.add_variable::<f32>("scalar", &[] as &[&str])?;
-    scalar_var.put_attribute("long_name", "Scalar variable without dimensions")?;
-    scalar_var.put_value(42.0f32, &[] as &[usize])?;
-    file.sync()?;
-
-    Ok(())
-}
-
 /// Validate the loaded NetCDF data for consistency
 fn validate_netcdf_data(
     metadata: &Metadata,
@@ -620,7 +587,7 @@ mod tests {
         println!("Loading real climate data from: {}", file_path.display());
 
         // Load the file
-        let (metadata, data) = load_netcdf_file(file_path, &HashSet::new())?;
+        let (metadata, data) = load_netcdf_file(file_path)?;
 
         // Verify dimensions
         assert!(metadata.dimensions.contains_key("time"));
@@ -750,7 +717,7 @@ mod tests {
 
     #[test]
     fn test_file_not_found() {
-        let result = load_netcdf_file(Path::new("/nonexistent/file.nc"), &HashSet::new());
+        let result = load_netcdf_file(Path::new("/nonexistent/file.nc"));
         assert!(result.is_err());
         match result.unwrap_err() {
             RossbyError::Io(e) => assert_eq!(e.kind(), std::io::ErrorKind::NotFound),
@@ -768,7 +735,7 @@ mod tests {
         create_test_netcdf_file(&file_path)?;
 
         // Load the file
-        let (metadata, data) = load_netcdf_file(&file_path, &HashSet::new())?;
+        let (metadata, data) = load_netcdf_file(&file_path)?;
 
         // Simplified verification based on our new test file structure
         assert!(metadata.global_attributes.contains_key("title"));
@@ -815,7 +782,7 @@ mod tests {
 
         // Load the file with debugging
         println!("Loading NetCDF file for attribute test");
-        let (metadata, _) = load_netcdf_file(&file_path, &HashSet::new())?;
+        let (metadata, _) = load_netcdf_file(&file_path)?;
         println!("File loaded successfully");
 
         // Debugging output
@@ -875,7 +842,7 @@ mod tests {
 
         // Load the file with debugging
         println!("Loading NetCDF file for validation test");
-        let (metadata, data) = load_netcdf_file(&file_path, &HashSet::new())?;
+        let (metadata, data) = load_netcdf_file(&file_path)?;
         println!("File loaded successfully");
 
         // Print debugging information
@@ -894,45 +861,6 @@ mod tests {
         }
 
         assert!(validation_result.is_ok());
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_scalar_variable_requires_ignore_list() -> Result<()> {
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("test_scalar.nc");
-        create_test_netcdf_file_with_scalar_variable(&file_path)?;
-
-        let result = load_netcdf(&file_path, Config::default());
-        assert!(result.is_err());
-
-        match result.unwrap_err() {
-            RossbyError::DataNotFound { message } => {
-                assert!(message.contains("scalar"));
-                assert!(message.contains("has no dimensions"));
-            }
-            other => panic!("Expected DataNotFound error, got {:?}", other),
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_ignore_variables_excludes_scalar_variable_from_processing() -> Result<()> {
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("test_scalar_ignored.nc");
-        create_test_netcdf_file_with_scalar_variable(&file_path)?;
-
-        let mut config = Config::default();
-        config.data.ignore_variables = vec!["scalar".to_string()];
-
-        let app_state = load_netcdf(&file_path, config)?;
-
-        assert!(!app_state.metadata.variables.contains_key("scalar"));
-        assert!(!app_state.data.contains_key("scalar"));
-        assert!(app_state.metadata.variables.contains_key("temperature"));
-        assert!(app_state.data.contains_key("temperature"));
 
         Ok(())
     }
