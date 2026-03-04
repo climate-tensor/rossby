@@ -382,18 +382,13 @@ fn create_json_stream(
         }
     }
 
-    // For dimensions not explicitly selected, use the entire range
-    for (dim_name, dim) in &state.metadata.dimensions {
-        if !selected_ranges.contains_key(dim_name) {
-            selected_ranges.insert(dim_name.clone(), (0, dim.size - 1));
-            if let Some(coords) = state.get_coordinate(dim_name) {
-                coordinate_arrays.insert(dim_name.clone(), coords.clone());
-            } else {
-                let indices: Vec<f64> = (0..dim.size).map(|i| i as f64).collect();
-                coordinate_arrays.insert(dim_name.clone(), indices);
-            }
-        }
-    }
+    let dimension_order = determine_dimension_order(&state, &variables, layout.as_ref())?;
+    populate_query_coordinates(
+        &state,
+        &dimension_order,
+        &mut selected_ranges,
+        &mut coordinate_arrays,
+    )?;
 
     // Calculate the total number of data points to check against limit
     let total_points: usize = coordinate_arrays
@@ -421,23 +416,7 @@ fn create_json_stream(
         let var_meta = state.get_variable_metadata_checked(var_name)?;
         var_metadata.push((var_name.clone(), var_meta));
     }
-
-    // Get dimensions based on the first variable for use in metadata
-    let dimension_order = if let Some(layout_dims) = &layout {
-        layout_dims
-            .iter()
-            .map(|dim| state.resolve_dimension(dim).unwrap_or(dim).to_string())
-            .collect::<Vec<_>>()
-    } else if !variables.is_empty() {
-        // Use dimensions from the first variable
-        let var_meta = state.get_variable_metadata_checked(&variables[0])?;
-        var_meta.dimensions.clone()
-    } else {
-        return Err(RossbyError::InvalidParameter {
-            param: "vars".to_string(),
-            message: "No valid variables specified".to_string(),
-        });
-    };
+    normalize_variable_arrays(&state, &variables, &mut var_data_arrays)?;
 
     // Prepare shape information for metadata
     let shapes: Vec<Vec<usize>> = var_data_arrays
@@ -899,6 +878,124 @@ fn process_dimension_constraints(
     Ok(selectors)
 }
 
+fn determine_dimension_order(
+    state: &AppState,
+    variables: &[String],
+    layout: Option<&Vec<String>>,
+) -> Result<Vec<String>> {
+    if let Some(layout_dims) = layout {
+        return Ok(layout_dims
+            .iter()
+            .map(|dim| state.resolve_dimension(dim).unwrap_or(dim).to_string())
+            .collect());
+    }
+
+    for var_name in variables {
+        let var_meta = state.get_variable_metadata_checked(var_name)?;
+        if !var_meta.dimensions.is_empty() {
+            return Ok(var_meta.dimensions.clone());
+        }
+    }
+
+    Ok(Vec::new())
+}
+
+fn populate_query_coordinates(
+    state: &AppState,
+    dimension_order: &[String],
+    selected_ranges: &mut HashMap<String, (usize, usize)>,
+    coordinate_arrays: &mut HashMap<String, Vec<f64>>,
+) -> Result<()> {
+    for dim_name in dimension_order {
+        if !selected_ranges.contains_key(dim_name) {
+            let dim = state.metadata.dimensions.get(dim_name).ok_or_else(|| {
+                RossbyError::DataNotFound {
+                    message: format!("Dimension {} not found in metadata", dim_name),
+                }
+            })?;
+
+            let end = dim
+                .size
+                .checked_sub(1)
+                .ok_or_else(|| RossbyError::DataNotFound {
+                    message: format!("Dimension {} is empty", dim_name),
+                })?;
+            selected_ranges.insert(dim_name.clone(), (0, end));
+        }
+
+        if coordinate_arrays.contains_key(dim_name) {
+            continue;
+        }
+
+        let (start, end) = selected_ranges[dim_name];
+        if let Some(coords) = state.get_coordinate(dim_name) {
+            if end >= coords.len() {
+                return Err(RossbyError::IndexOutOfBounds {
+                    param: dim_name.clone(),
+                    value: format!("{}..{}", start, end),
+                    max: coords.len().saturating_sub(1),
+                });
+            }
+            coordinate_arrays.insert(dim_name.clone(), coords[start..=end].to_vec());
+        } else {
+            let indices: Vec<f64> = (start..=end).map(|i| i as f64).collect();
+            coordinate_arrays.insert(dim_name.clone(), indices);
+        }
+    }
+
+    Ok(())
+}
+
+fn normalize_variable_arrays(
+    state: &AppState,
+    variables: &[String],
+    data_arrays: &mut [Array<f32, IxDyn>],
+) -> Result<()> {
+    let reference_shape = variables
+        .iter()
+        .zip(data_arrays.iter())
+        .find_map(|(var_name, array)| {
+            state
+                .get_variable_metadata_checked(var_name)
+                .ok()
+                .filter(|meta| !meta.dimensions.is_empty())
+                .map(|_| array.shape().to_vec())
+        });
+
+    let Some(reference_shape) = reference_shape else {
+        return Ok(());
+    };
+
+    for (var_name, array) in variables.iter().zip(data_arrays.iter_mut()) {
+        let var_meta = state.get_variable_metadata_checked(var_name)?;
+        if var_meta.dimensions.is_empty() {
+            let scalar_value =
+                array
+                    .iter()
+                    .next()
+                    .copied()
+                    .ok_or_else(|| RossbyError::DataNotFound {
+                        message: format!("Scalar variable {} has no data", var_name),
+                    })?;
+            *array = Array::from_elem(IxDyn(&reference_shape), scalar_value);
+        }
+
+        if array.shape() != reference_shape.as_slice() {
+            return Err(RossbyError::InvalidParameter {
+                param: "vars".to_string(),
+                message: format!(
+                    "Requested variables resolve to incompatible shapes: {} has {:?}, expected {:?}",
+                    var_name,
+                    array.shape(),
+                    reference_shape
+                ),
+            });
+        }
+    }
+
+    Ok(())
+}
+
 /// Extract data based on the query and format it as Arrow
 fn extract_and_format_data(state: Arc<AppState>, query: ParsedDataQuery) -> Result<Vec<u8>> {
     let ParsedDataQuery {
@@ -976,22 +1073,13 @@ fn extract_and_format_data(state: Arc<AppState>, query: ParsedDataQuery) -> Resu
         }
     }
 
-    // For dimensions not explicitly selected, use the entire range
-    for (dim_name, dim) in &state.metadata.dimensions {
-        if !selected_ranges.contains_key(dim_name) {
-            selected_ranges.insert(dim_name.clone(), (0, dim.size - 1));
-
-            // Store all coordinate values
-            if let Some(coords) = state.get_coordinate(dim_name) {
-                coordinate_arrays.insert(dim_name.clone(), coords.clone());
-            } else {
-                // If no coordinates are available, create a range of indices as coordinates
-                // This is a fallback for test data that might not have explicit coordinate variables
-                let indices: Vec<f64> = (0..dim.size).map(|i| i as f64).collect();
-                coordinate_arrays.insert(dim_name.clone(), indices);
-            }
-        }
-    }
+    let dimension_order = determine_dimension_order(&state, &variables, layout.as_ref())?;
+    populate_query_coordinates(
+        &state,
+        &dimension_order,
+        &mut selected_ranges,
+        &mut coordinate_arrays,
+    )?;
 
     // Calculate the total number of data points to check against limit
     let total_points: usize = coordinate_arrays
@@ -1014,25 +1102,7 @@ fn extract_and_format_data(state: Arc<AppState>, query: ParsedDataQuery) -> Resu
         let array = extract_variable_data(&state, var_name, &selected_ranges)?;
         var_data_arrays.push(array);
     }
-
-    // Get dimensions based on the first variable for use in Arrow schema
-    // Or use layout order if specified
-    let dimension_order = if let Some(layout_dims) = &layout {
-        // Convert layout names to file-specific names
-        layout_dims
-            .iter()
-            .map(|dim| state.resolve_dimension(dim).unwrap_or(dim).to_string())
-            .collect::<Vec<_>>()
-    } else if !variables.is_empty() {
-        // Use dimensions from the first variable
-        let var_meta = state.get_variable_metadata_checked(&variables[0])?;
-        var_meta.dimensions.clone()
-    } else {
-        return Err(RossbyError::InvalidParameter {
-            param: "vars".to_string(),
-            message: "No valid variables specified".to_string(),
-        });
-    };
+    normalize_variable_arrays(&state, &variables, &mut var_data_arrays)?;
 
     // Convert coordinate arrays HashMap to vectors in dimension order
     let mut ordered_dimension_names = Vec::new();
@@ -1365,6 +1435,27 @@ mod tests {
         Arc::new(AppState::new(config, metadata, data))
     }
 
+    fn create_test_state_with_scalar(max_data_points: usize) -> Arc<AppState> {
+        let mut state = create_test_state().as_ref().clone();
+
+        state.metadata.variables.insert(
+            "offset".to_string(),
+            Variable {
+                name: "offset".to_string(),
+                dimensions: Vec::new(),
+                shape: Vec::new(),
+                attributes: HashMap::new(),
+                dtype: "f32".to_string(),
+            },
+        );
+        state
+            .data
+            .insert("offset".to_string(), Array::from_elem(IxDyn(&[]), 273.15));
+        state.config.server.max_data_points = max_data_points;
+
+        Arc::new(state)
+    }
+
     #[test]
     fn test_dimension_selector_parsing() {
         // Create a test state
@@ -1450,5 +1541,34 @@ mod tests {
 
         // Make sure the length is significant (it should be more than just headers)
         assert!(arrow_data.len() > 100);
+    }
+
+    #[test]
+    fn test_extract_and_format_data_with_scalar_first() {
+        let state = create_test_state_with_scalar(1000);
+        let query = ParsedDataQuery {
+            variables: vec!["offset".to_string(), "t2m".to_string()],
+            dimension_selectors: vec![DimensionSelector::SingleIndex {
+                dimension: "time".to_string(),
+                index: 0,
+            }],
+            layout: None,
+        };
+
+        let arrow_data = extract_and_format_data(state, query).unwrap();
+        assert!(!arrow_data.is_empty());
+    }
+
+    #[test]
+    fn test_extract_and_format_scalar_only_ignores_unrelated_dimensions() {
+        let state = create_test_state_with_scalar(1);
+        let query = ParsedDataQuery {
+            variables: vec!["offset".to_string()],
+            dimension_selectors: Vec::new(),
+            layout: None,
+        };
+
+        let arrow_data = extract_and_format_data(state, query).unwrap();
+        assert!(!arrow_data.is_empty());
     }
 }
