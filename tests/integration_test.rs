@@ -434,12 +434,9 @@ async fn test_data_endpoint() {
     assert_eq!(response.status(), 200);
 
     // Test with layout specification (Arrow format)
-    let response = http_client::get(
-        &addr,
-        "/data?vars=temperature&time_index=0&layout=latitude,longitude",
-    )
-    .await
-    .expect("Failed to make request");
+    let response = http_client::get(&addr, "/data?vars=temperature&time_index=0&layout=lat,lon")
+        .await
+        .expect("Failed to make request");
 
     assert_eq!(response.status(), 200);
 

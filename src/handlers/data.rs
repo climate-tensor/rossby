@@ -276,13 +276,6 @@ fn process_data_query_json(state: Arc<AppState>, params: DataQuery) -> Result<Re
             if dim_result.is_err() {
                 debug!("Failed to resolve dimension: {} - {:?}", dim, dim_result);
 
-                // Check if this is a canonical name that we should accept
-                let canonical_dims = ["latitude", "longitude", "time", "level"];
-                if canonical_dims.contains(&dim.as_str()) {
-                    debug!("Accepting canonical dimension name: {}", dim);
-                    continue; // Accept canonical names even if they don't resolve
-                }
-
                 return Err(RossbyError::InvalidParameter {
                     param: "layout".to_string(),
                     message: format!("Unknown dimension in layout: {}", dim),
@@ -659,13 +652,6 @@ fn process_data_query(state: Arc<AppState>, params: DataQuery) -> Result<Vec<u8>
 
             if dim_result.is_err() {
                 debug!("Failed to resolve dimension: {} - {:?}", dim, dim_result);
-
-                // Check if this is a canonical name that we should accept
-                let canonical_dims = ["latitude", "longitude", "time", "level"];
-                if canonical_dims.contains(&dim.as_str()) {
-                    debug!("Accepting canonical dimension name: {}", dim);
-                    continue; // Accept canonical names even if they don't resolve
-                }
 
                 return Err(RossbyError::InvalidParameter {
                     param: "layout".to_string(),
