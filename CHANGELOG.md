@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [0.0.3] - 2026-03-03
 
+### Added
+
+- Allow scalar NetCDF variables through data loader and exporters #9
+
 ### Changed
 
 - Bump dependency versions
