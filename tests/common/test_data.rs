@@ -441,6 +441,27 @@ pub fn create_test_weather_nc(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Creates a weather NetCDF file and appends a scalar variable.
+///
+/// # Arguments
+///
+/// * `path` - The path where the NetCDF file will be saved
+///
+/// # Returns
+///
+/// * `Result<()>` - Ok if successful, or an error
+pub fn create_test_weather_with_scalar_nc(path: &Path) -> Result<()> {
+    create_test_weather_nc(path)?;
+
+    let mut file = netcdf::append(path)?;
+    let mut offset_var = file.add_variable::<f32>("offset", &[])?;
+    offset_var.put_attribute("units", "K")?;
+    offset_var.put_attribute("long_name", "Scalar Offset")?;
+    offset_var.put_value(273.15f32, ())?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -510,5 +531,18 @@ mod tests {
         assert!(nc_file.variable("v_wind").is_some());
         assert!(nc_file.variable("pressure").is_some());
         assert!(nc_file.variable("precipitation").is_some());
+    }
+
+    #[test]
+    fn test_create_test_weather_with_scalar_nc() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("weather_scalar_test.nc");
+
+        assert!(create_test_weather_with_scalar_nc(&file_path).is_ok());
+        assert!(file_path.exists());
+
+        let nc_file = netcdf::open(&file_path).unwrap();
+        let offset = nc_file.variable("offset").unwrap();
+        assert!(offset.dimensions().is_empty());
     }
 }

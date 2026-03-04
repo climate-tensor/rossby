@@ -504,13 +504,6 @@ fn validate_netcdf_data(
 
     // Check if dimensions match variables
     for (var_name, var) in &metadata.variables {
-        // Check that the variable has dimensions
-        if var.dimensions.is_empty() {
-            return Err(RossbyError::DataNotFound {
-                message: format!("Variable {} has no dimensions", var_name),
-            });
-        }
-
         // Check that all dimensions exist
         for dim_name in &var.dimensions {
             if !metadata.dimensions.contains_key(dim_name) {
@@ -861,6 +854,36 @@ mod tests {
         }
 
         assert!(validation_result.is_ok());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_scalar_variable_loading() -> Result<()> {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("scalar.nc");
+
+        let mut file = netcdf::create(&file_path)?;
+        file.add_attribute("title", "Scalar Test File")?;
+
+        {
+            let mut scalar_var = file.add_variable::<f32>("offset", &[])?;
+            scalar_var.put_attribute("units", "K")?;
+            scalar_var.put_value(42.5f32, ())?;
+        }
+
+        file.sync()?;
+
+        let (metadata, data) = load_netcdf_file(&file_path)?;
+        validate_netcdf_data(&metadata, &data)?;
+
+        let offset_meta = metadata.variables.get("offset").unwrap();
+        assert!(offset_meta.dimensions.is_empty());
+        assert!(offset_meta.shape.is_empty());
+
+        let offset_data = data.get("offset").unwrap();
+        assert_eq!(offset_data.shape(), &[] as &[usize]);
+        assert_eq!(offset_data.iter().copied().collect::<Vec<_>>(), vec![42.5]);
 
         Ok(())
     }
