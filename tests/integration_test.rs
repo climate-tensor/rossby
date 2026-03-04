@@ -6,6 +6,7 @@ mod common;
 
 use common::{http_client, image_utils, test_data};
 use std::net::SocketAddr;
+use std::path::Path;
 
 // Global test setup for server
 use once_cell::sync::OnceCell;
@@ -13,58 +14,18 @@ use once_cell::sync::OnceCell;
 static TEST_TEMP_DIR: OnceCell<tempfile::TempDir> = OnceCell::new();
 static TEST_FILE_PATH: OnceCell<String> = OnceCell::new();
 
-/// Start a test server on a specified port
-async fn start_test_server() -> SocketAddr {
-    // Initialize test data and get temp directory
-    let _temp_dir = TEST_TEMP_DIR.get_or_init(|| {
-        let dir = tempfile::tempdir().unwrap();
-        let file_path = dir.path().join("test_weather.nc");
-        test_data::create_test_weather_nc(&file_path).unwrap();
-
-        // Save the path for later reference
-        TEST_FILE_PATH
-            .set(file_path.to_string_lossy().to_string())
-            .unwrap();
-
-        dir
-    });
-
+async fn spawn_test_server(app_state: rossby::state::AppState) -> SocketAddr {
     // Use port 0 to let the OS assign an available port
     let addr = SocketAddr::from((std::net::Ipv4Addr::new(127, 0, 0, 1), 0));
 
-    // Start by creating a listener to get the OS-assigned port
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .expect("Failed to bind to port");
 
-    // Get the actual bound address with the OS-assigned port
     let bound_addr = listener.local_addr().expect("Failed to get local address");
+    let state = std::sync::Arc::new(app_state);
 
-    // Get the test file path
-    let file_path = TEST_FILE_PATH.get().expect("Test file path not set");
-
-    // Start the server
     tokio::spawn(async move {
-        // Create a minimal config
-        let config = rossby::Config {
-            server: rossby::config::ServerConfig {
-                host: "127.0.0.1".to_string(),
-                port: bound_addr.port(),
-                workers: Some(1),
-                discovery_url: None,
-                max_data_points: 10_000_000, // Default 10 million points
-            },
-            ..Default::default()
-        };
-
-        // Load the test NetCDF file
-        let app_state =
-            rossby::data_loader::load_netcdf(std::path::Path::new(file_path), config.clone())
-                .expect("Failed to load test NetCDF file");
-
-        let state = std::sync::Arc::new(app_state);
-
-        // Create the router
         let app = axum::Router::new()
             .route(
                 "/metadata",
@@ -91,10 +52,48 @@ async fn start_test_server() -> SocketAddr {
         axum::serve(listener, app).await.expect("Server error");
     });
 
-    // The server will take some time to start up fully
     println!("Test server starting on {}", bound_addr);
 
     bound_addr
+}
+
+async fn start_test_server_for_file(path: &Path, max_data_points: usize) -> SocketAddr {
+    let config = rossby::Config {
+        server: rossby::config::ServerConfig {
+            host: "127.0.0.1".to_string(),
+            port: 0,
+            workers: Some(1),
+            discovery_url: None,
+            max_data_points,
+        },
+        ..Default::default()
+    };
+
+    let app_state =
+        rossby::data_loader::load_netcdf(path, config).expect("Failed to load test NetCDF file");
+
+    spawn_test_server(app_state).await
+}
+
+/// Start a test server on a specified port
+async fn start_test_server() -> SocketAddr {
+    // Initialize test data and get temp directory
+    let _temp_dir = TEST_TEMP_DIR.get_or_init(|| {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("test_weather.nc");
+        test_data::create_test_weather_nc(&file_path).unwrap();
+
+        // Save the path for later reference
+        TEST_FILE_PATH
+            .set(file_path.to_string_lossy().to_string())
+            .unwrap();
+
+        dir
+    });
+
+    // Get the test file path
+    let file_path = TEST_FILE_PATH.get().expect("Test file path not set");
+    start_test_server_for_file(Path::new(file_path), 10_000_000).await
 }
 
 /// Initialize a new test server for each test
@@ -175,6 +174,46 @@ async fn test_metadata_endpoint() {
     let variables = json.get("variables").unwrap();
     assert!(variables.get("temperature").is_some());
     assert!(variables.get("humidity").is_some());
+}
+
+#[tokio::test]
+async fn test_metadata_endpoint_with_scalar_variable() {
+    let dir = tempfile::tempdir().unwrap();
+    let file_path = dir.path().join("test_weather_scalar.nc");
+    test_data::create_test_weather_with_scalar_nc(&file_path).unwrap();
+
+    let addr = start_test_server_for_file(&file_path, 10_000_000).await;
+
+    let response = http_client::get(&addr, "/metadata")
+        .await
+        .expect("Failed to make request");
+
+    assert_eq!(response.status(), 200);
+
+    let body = response.text().await.expect("Failed to get response body");
+    let json: serde_json::Value =
+        serde_json::from_str(&body).expect("Failed to parse JSON response");
+
+    let offset = json
+        .get("variables")
+        .and_then(|vars| vars.get("offset"))
+        .expect("Missing scalar variable metadata");
+    assert_eq!(
+        offset
+            .get("dimensions")
+            .and_then(|dims| dims.as_array())
+            .unwrap()
+            .len(),
+        0
+    );
+    assert_eq!(
+        offset
+            .get("shape")
+            .and_then(|shape| shape.as_array())
+            .unwrap()
+            .len(),
+        0
+    );
 }
 
 #[tokio::test]
@@ -525,6 +564,61 @@ async fn test_data_endpoint() {
         .expect("Failed to make request");
 
     assert_eq!(response.status(), 400);
+}
+
+#[tokio::test]
+async fn test_data_endpoint_with_scalar_variable() {
+    let dir = tempfile::tempdir().unwrap();
+    let file_path = dir.path().join("test_weather_scalar.nc");
+    test_data::create_test_weather_with_scalar_nc(&file_path).unwrap();
+
+    let addr = start_test_server_for_file(&file_path, 10_000_000).await;
+
+    let response = http_client::get(&addr, "/data?vars=offset&format=json")
+        .await
+        .expect("Failed to make request");
+
+    assert_eq!(response.status(), 200);
+    let body = response.text().await.expect("Failed to get response body");
+    let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
+
+    assert_eq!(
+        json["metadata"]["dimensions"]
+            .as_array()
+            .expect("dimensions should be an array")
+            .len(),
+        0
+    );
+    let offset_data = json["data"]["offset"]
+        .as_array()
+        .expect("offset data should be an array");
+    assert_eq!(offset_data.len(), 1);
+    assert!((offset_data[0].as_f64().unwrap() - 273.15).abs() < 1e-6);
+
+    let response = http_client::get(
+        &addr,
+        "/data?vars=offset,temperature&time_index=0&format=json",
+    )
+    .await
+    .expect("Failed to make request");
+
+    assert_eq!(response.status(), 200);
+    let body = response.text().await.expect("Failed to get response body");
+    let json: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse JSON");
+
+    let offset_data = json["data"]["offset"]
+        .as_array()
+        .expect("offset data should be an array");
+    let temp_data = json["data"]["temperature"]
+        .as_array()
+        .expect("temperature data should be an array");
+    assert_eq!(offset_data.len(), temp_data.len());
+    assert!(offset_data.iter().all(|value| {
+        value
+            .as_f64()
+            .map(|n| (n - 273.15).abs() < 1e-6)
+            .unwrap_or(false)
+    }));
 }
 
 #[tokio::test]
