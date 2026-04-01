@@ -91,6 +91,14 @@ jobs:
             tar -C dist -czf "${{ steps.release_meta.outputs.asset_path }}" "${archive_name}"
           fi
 
+      - name: Generate release checksum
+        shell: bash
+        run: |
+          asset_path="${{ steps.release_meta.outputs.asset_path }}"
+          checksum_path="${asset_path}.sha256"
+
+          shasum -a 256 "${asset_path}" | sed "s#  ${asset_path}#  $(basename "${asset_path}")#" > "${checksum_path}"
+
       - name: Ensure GitHub release exists
         env:
           GH_TOKEN: ${{ github.token }}
@@ -112,4 +120,5 @@ jobs:
         run: |
           gh release upload "${{ steps.release_meta.outputs.tag }}" \
             "${{ steps.release_meta.outputs.asset_path }}" \
+            "${{ steps.release_meta.outputs.asset_path }}.sha256" \
             --clobber
