@@ -47,13 +47,13 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Additional utilities
 once_cell = "1"
 parking_lot = "0.12"
-uuid = { version = "1.21", features = ["v4"] }
+uuid = { version = "1.23", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 bytes = "1.11.1"
 futures = "0.3"
 
 # Apache Arrow for data serialization
-arrow = "58.0.0"
+arrow = "58.1.0"
 arrow-array = "58.0.0"
 arrow-ipc = "58.0.0"
 
